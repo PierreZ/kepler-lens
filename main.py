@@ -3,6 +3,7 @@ from os.path import expanduser
 import wget
 import tarfile
 import click
+import kplr
 
 
 K2_URL = 'https://archive.stsci.edu/pub/k2/lightcurves/tarfiles/'
@@ -27,9 +28,10 @@ def cli():
 
 @cli.command()
 @click.option('--token', default='', help='warp WRITE token')
+@click.option('--endpoint', default='http://localhost:8080', help='warp endpoint')
 @click.option('--path', default='/tmp/kepler', help='kepler download folder')
 @click.option('--limit', default='all', help='comma separated list of compagne to download.')
-def init(token, path, limit):
+def init(token, endpoint, path, limit):
     click.echo('Initializing the database')
     click.echo('Downloading K2 compagnes...')
 
@@ -51,15 +53,16 @@ def init(token, path, limit):
         compagnes = K2_TARFILES
 
     for compagne, nbrfiles in compagnes.items():
-        click.echo('downloading {} dataset'.format(compagne))
-        for nbrfile in range(1, nbrfiles):
+        click.echo('downloading {} dataset, {} files'.format(compagne, nbrfiles))
 
-           
+        for nbrfile in range(1, nbrfiles + 1):
+
             filename = 'public_{}_long_{}'.format(compagne, nbrfile)
             outfolder = lightcurvesfolder + filename
 
              # checking if already downloaded
             if os.path.exists(outfolder):
+                click.echo('folder {} already exists'.format(outfolder))
                 click.echo('{} already downloaded, moving on'.format(filename))
                 continue
             else:
@@ -86,8 +89,59 @@ def init(token, path, limit):
     click.echo('all compagnes are fetched, generating csv')
 
 @cli.command()
-def update():
-    click.echo('Updating the database...')
+@click.option('--token', default='', help='warp WRITE token')
+@click.option('--endpoint', default='http://localhost:8080', help='warp endpoint')
+def update(endpoint, token):
+    
+    click.echo('Updating warp10...')
+    client = kplr.API()
+
+    click.echo('Fetching all KOI')
+    # Getting all Kepler object of Interests
+    kois = client.kois(where="koi_period>0", sort="kepid")
+
+    click.echo('Found {} KOIS'.format(len(kois)))
+
+    koisdict = {}
+
+    for koi in kois:
+        disposition = koi.koi_disposition
+        score = koi.koi_score
+        kepid = koi.kepid
+        kepoi_name = koi.kepoi_name
+        kepler_name = koi.kepler_name
+
+        click.echo('fetched info for {}: kepoi_name:{}, kepler_name:{}, disposition:{}, score:{}'
+                   .format(kepid, kepoi_name, kepler_name, disposition, score))
+
+        lcs = koi.get_light_curves(short_cadence=False)
+        click.echo('number of files:{}'.format(len(lcs)))
+
+        files = []
+
+        for lcsfile in lcs:
+            files.append(lcsfile)
+
+        if  kepid in koisdict:
+            koisdict[kepid]['attributes'].append({
+                'kepoi_name': kepoi_name,
+                'kepler_name': kepler_name,
+                'disposition': disposition,
+                'score': score,
+                })
+        else:
+            koisdict[kepid] = {
+                'filename': files,
+                'attributes': [{
+                    'kepoi_name': kepoi_name,
+                    'kepler_name': kepler_name,
+                    'disposition': disposition,
+                    'score': score,
+                }],
+            }
+
+    click.echo("attributes fetched, updating GTS with the new attributes")
+    click.echo('{}'.format(koisdict))
 
 if __name__ == '__main__':
     cli()
