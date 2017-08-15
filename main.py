@@ -1,12 +1,14 @@
 import os
-from os.path import expanduser
 import wget
 import tarfile
 import click
 import kplr
+from string import Template
+import json
+import sys
 
+ARCHIVE_URL = 'https://archive.stsci.edu/pub/{}/lightcurves/tarfiles/'
 
-K2_URL = 'https://archive.stsci.edu/pub/k2/lightcurves/tarfiles/'
 K2_TARFILES = {
     'c1': 2,
     'c102': 2,
@@ -21,6 +23,44 @@ K2_TARFILES = {
     'c8': 2
 }
 
+KEPLER_TARFILES = {
+    'Q0': 1,
+    'Q1': 6,
+    'Q2': 10,
+    'Q3': 10,
+    'Q4': 10,
+    'Q5': 10,
+    'Q6': 10,
+    'Q7': 10,
+    'Q8': 8,
+    'Q9': 11,
+    'Q10': 10,
+    'Q11': 10,
+    'Q12': 9,
+    'Q13': 10,
+    'Q14': 11,
+    'Q15': 10,
+    'Q16': 10,
+    'Q17': 4
+}
+
+META_UPDATE_MC2_TEMPLATE = """
+<'
+$attributes
+'>
+JSON-> 'data' STORE 
+
+MARK
+
+'$rt' '~.*' { 'filename' '$filenames' } NOW NOW ] FETCH
+
+<%
+    DUP NAME RENAME
+    $$data 'attributes' GET SETATTRIBUTES
+%> FOREACH
+COUNTTOMARK ->LIST '$wt' UPDATE
+"""
+
 
 @click.group()
 def cli():
@@ -31,9 +71,18 @@ def cli():
 @click.option('--endpoint', default='http://localhost:8080', help='warp endpoint')
 @click.option('--path', default='/tmp/kepler', help='kepler download folder')
 @click.option('--limit', default='all', help='comma separated list of compagne to download.')
-def init(token, endpoint, path, limit):
-    click.echo('Initializing the database')
-    click.echo('Downloading K2 compagnes...')
+@click.argument('dataset', type=click.Choice(['k2', 'kepler']))
+def init(token, endpoint, path, limit, dataset):
+    if dataset == "kepler":
+        download_campagne(token, endpoint, path, limit, "kepler", KEPLER_TARFILES)
+    if dataset == "k2":
+        download_campagne(token, endpoint, path, limit, "k2", K2_TARFILES)
+
+
+def download_campagne(token, endpoint, path, limit, dataset, dictFiles):
+    click.echo('Initializing the database, downloading {} dataset...'.format(dataset))
+
+    baseurl = ARCHIVE_URL.format(dataset)
 
     lightcurvesfolder = path + "/lightcurves/"
     csvfolder = path + "/csv/"
@@ -45,12 +94,12 @@ def init(token, endpoint, path, limit):
         click.echo('Creating folder {}'.format(csvfolder))
         os.makedirs(csvfolder)
 
-    if limit is not "all":
+    if limit != "all":
         limits = limit.split(",")
         click.echo('Filtering compagne, only using {}'.format(limit))
-        compagnes = {k:v for (k, v) in K2_TARFILES.items() if k in limits}
+        compagnes = {k:v for (k, v) in dictFiles.items() if k in limits}
     else:
-        compagnes = K2_TARFILES
+        compagnes = dictFiles
 
     for compagne, nbrfiles in compagnes.items():
         click.echo('downloading {} dataset, {} files'.format(compagne, nbrfiles))
@@ -68,7 +117,12 @@ def init(token, endpoint, path, limit):
             else:
                 os.makedirs(outfolder)
 
-            url = K2_URL + compagne + "/" + filename + ".tgz"
+
+            url = baseurl + compagne
+            if dataset == "kepler":
+                url = url + "_public"
+            url = url + "/" + filename + ".tgz"
+
             click.echo('downloading {}'.format(url))
             outfile = lightcurvesfolder+filename+".tgz"
             wget.download(url, out=outfile)
@@ -89,16 +143,17 @@ def init(token, endpoint, path, limit):
     click.echo('all compagnes are fetched, generating csv')
 
 @cli.command()
-@click.option('--token', default='', help='warp WRITE token')
+@click.option('--wtoken', default='w', help='warp WRITE token')
+@click.option('--rtoken', default='r', help='warp READ token')
 @click.option('--endpoint', default='http://localhost:8080', help='warp endpoint')
-def update(endpoint, token):
-    
-    click.echo('Updating warp10...')
+@click.option('--limit', default=0, help='limit on koi_period')
+def update(wtoken, rtoken, endpoint, limit):
+
     client = kplr.API()
 
-    click.echo('Fetching all KOI')
-    # Getting all Kepler object of Interests
-    kois = client.kois(where="koi_period>0", sort="kepid")
+    click.echo('Fetching all KOI where koi_period>{}'.format(limit))
+    # Getting all Kepler object of Interests, not K2
+    kois = client.kois(where="koi_period>{}".format(limit), sort="kepid")
 
     click.echo('Found {} KOIS'.format(len(kois)))
 
@@ -111,38 +166,58 @@ def update(endpoint, token):
         kepoi_name = koi.kepoi_name
         kepler_name = koi.kepler_name
 
+        if score is None:
+            score = -1
+
+        if kepler_name is None:
+            kepler_name = ''
+
+        # Example:
+        # kepoi_name:K00992.01, kepler_name:Kepler-745 b, disposition:CONFIRMED, score:0
         click.echo('fetched info for {}: kepoi_name:{}, kepler_name:{}, disposition:{}, score:{}'
                    .format(kepid, kepoi_name, kepler_name, disposition, score))
 
         lcs = koi.get_light_curves(short_cadence=False)
-        click.echo('number of files:{}'.format(len(lcs)))
 
         files = []
 
         for lcsfile in lcs:
-            files.append(lcsfile)
+            _, filename = os.path.split(lcsfile.filename)
+            files.append(filename)
+
+            if "":
+                click.echo("ktwo found! {}".format(filename))
+                sys.exit(1)
 
         if  kepid in koisdict:
-            koisdict[kepid]['attributes'].append({
-                'kepoi_name': kepoi_name,
+            koisdict[kepid]['attributes']['{}'.format(kepoi_name)] = {
                 'kepler_name': kepler_name,
                 'disposition': disposition,
                 'score': score,
-                })
+            }
+            koisdict[kepid]['attributes']['size'] += 1
         else:
             koisdict[kepid] = {
-                'filename': files,
-                'attributes': [{
-                    'kepoi_name': kepoi_name,
-                    'kepler_name': kepler_name,
-                    'disposition': disposition,
-                    'score': score,
-                }],
+                'filenames': files,
+                'kepid': kepid,
+                'attributes': {
+                    '{}'.format(kepoi_name): {
+                        'kepler_name': kepler_name,
+                        'disposition': disposition,
+                        'score': score,
+                    },
+                    'size': 1,
+                },
             }
 
     click.echo("attributes fetched, updating GTS with the new attributes")
-    click.echo('{}'.format(koisdict))
+
+    for _, value in koisdict.items():
+        mc2 = Template(META_UPDATE_MC2_TEMPLATE)
+        mc2 = mc2.substitute(rt=rtoken, wt=wtoken, 
+                             filenames="~(" + ")|(".join(value['filenames']) + ")",
+                             attributes=json.dumps(value['attributes']))
+        click.echo('{}'.format(mc2))
 
 if __name__ == '__main__':
     cli()
-    
