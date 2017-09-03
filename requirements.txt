@@ -1,3 +1,4 @@
 Click
 wget
 kplr
+-e git+https://github.com/KeplerGO/PyKE.git@7682e68a5c5dca2fc96d9ee978466296c3ae11e3#egg=pyke
