@@ -78,7 +78,7 @@ def init(wtoken, endpoint, path, limit, dataset):
     if dataset == "kepler":
         download_campagne(path, limit, "kepler", KEPLER_TARFILES, wtoken, endpoint)
     if dataset == "k2":
-        download_campagne(path, limit, "k2", K2_TARFILES)
+        download_campagne(path, limit, "k2", K2_TARFILES, wtoken, endpoint)
 
 
 def download_campagne(path, limit, dataset, dictFiles, wtoken, endpoint):
