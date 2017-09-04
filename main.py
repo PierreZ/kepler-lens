@@ -115,7 +115,8 @@ def download_campagne(path, limit, dataset, dictFiles, wtoken, endpoint):
     click.echo('all compagnes are fetched, bye')
 
 def push(csvfolder, endpoint, wtoken):
-    call(["kepler2warp", '--path={}'.format(csvfolder), '--endpoint={}'.format(endpoint), '--token={}'.format(wtoken)])
+    call(["/bin/kepler2warp10", '--path={}'.format(csvfolder), '--endpoint={}'.format(endpoint), '--token={}'.format(wtoken)])
+
 def generate_csv(compagne, nbrfile, lightcurvesfolder, csvfolder):
 
     filename = 'public_{}_long_{}/'.format(compagne, nbrfile)
@@ -125,7 +126,7 @@ def generate_csv(compagne, nbrfile, lightcurvesfolder, csvfolder):
     for file in os.listdir(directory):
         filename = os.fsdecode(file)
         if filename.endswith(".fits") and not os.path.exists(csvfolder + filename.replace(".fits", ".csv")):
-            # Generating CSV 
+            # Generating CSV
             kepconvert(lightcurvesfolder + filename, "fits2csv", "TIME,SAP_FLUX,SAP_FLUX_ERR",
                        outfile=csvfolder + filename.replace(".fits", ".csv"), timeformat='unix',
                        baddata=True, overwrite=False, verbose=False)
