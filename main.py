@@ -5,6 +5,7 @@ import click
 import kplr
 from string import Template
 from pyke import kepconvert
+from subprocess import call
 import json
 import sys
 
@@ -53,7 +54,7 @@ JSON-> 'data' STORE
 
 MARK
 
-'$rt' '~.*' { 'filename' '$filenames' } NOW NOW ] FETCH
+'$rt' '~.*' { 'id' '$filenames' } NOW NOW ] FETCH
 
 <%
     DUP NAME RENAME
@@ -68,17 +69,19 @@ def cli():
     pass
 
 @cli.command()
+@click.option('--wtoken', default='w', help='warp WRITE token')
+@click.option('--endpoint', default='http://localhost:8080', help='warp endpoint')
 @click.option('--path', default='/tmp/kepler', help='kepler download folder')
 @click.option('--limit', default='all', help='comma separated list of compagne to download.')
 @click.argument('dataset', type=click.Choice(['k2', 'kepler']))
-def init(path, limit, dataset):
+def init(wtoken, endpoint, path, limit, dataset):
     if dataset == "kepler":
-        download_campagne(path, limit, "kepler", KEPLER_TARFILES)
+        download_campagne(path, limit, "kepler", KEPLER_TARFILES, wtoken, endpoint)
     if dataset == "k2":
         download_campagne(path, limit, "k2", K2_TARFILES)
 
 
-def download_campagne(path, limit, dataset, dictFiles):
+def download_campagne(path, limit, dataset, dictFiles, wtoken, endpoint):
     click.echo('Initializing the database, downloading {} dataset...'.format(dataset))
 
     baseurl = ARCHIVE_URL.format(dataset)
@@ -105,11 +108,14 @@ def download_campagne(path, limit, dataset, dictFiles):
         for nbrfile in range(1, nbrfiles + 1):
             dl_campagne(compagne, nbrfile, lightcurvesfolder, baseurl, dataset)
             generate_csv(compagne, nbrfile, lightcurvesfolder, csvfolder)
+            push(csvfolder, endpoint, wtoken)
 
         click.echo('compagne {} done!'.format(compagne))
 
     click.echo('all compagnes are fetched, bye')
 
+def push(csvfolder, endpoint, wtoken):
+    call(["kepler2warp", '--path={}'.format(csvfolder), '--endpoint={}'.format(endpoint), '--token={}'.format(wtoken)])
 def generate_csv(compagne, nbrfile, lightcurvesfolder, csvfolder):
 
     filename = 'public_{}_long_{}/'.format(compagne, nbrfile)
@@ -165,7 +171,7 @@ def dl_campagne(compagne, nbrfile, lightcurvesfolder, baseurl, dataset):
 @click.option('--rtoken', default='r', help='warp READ token')
 @click.option('--endpoint', default='http://localhost:8080', help='warp endpoint')
 @click.option('--limit', default=0, help='limit on koi_period')
-def update(wtoken, limit):
+def update(wtoken, rtoken, endpoint, limit):
 
     client = kplr.API()
 
@@ -201,11 +207,10 @@ def update(wtoken, limit):
 
         for lcsfile in lcs:
             _, filename = os.path.split(lcsfile.filename)
+            filename = filename.split("-")[0]
+            filename = filename[4:]
+            print(filename)
             files.append(filename)
-
-            if "":
-                click.echo("ktwo found! {}".format(filename))
-                sys.exit(1)
 
         if  kepid in koisdict:
             koisdict[kepid]['attributes']['{}'.format(kepoi_name)] = {
@@ -229,6 +234,8 @@ def update(wtoken, limit):
             }
 
     click.echo("attributes fetched, updating GTS with the new attributes")
+    files = set(files)
+
 
     for _, value in koisdict.items():
         mc2 = Template(META_UPDATE_MC2_TEMPLATE)
