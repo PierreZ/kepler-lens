@@ -17,6 +17,7 @@ K2_TARFILES = {
     'c111': 1,
     'c112': 2,
     'c12': 3,
+    'c13': 2,
     'c3': 3,
     'c4': 1,
     'c5': 2,
@@ -54,7 +55,7 @@ JSON-> 'data' STORE
 
 MARK
 
-'$rt' '~.*' { 'id' '$filenames' } NOW NOW ] FETCH
+'$rt' '~.*' { 'id' '$filenames' } NOW -1 ] FETCH
 
 <%
     DUP NAME RENAME
@@ -210,8 +211,9 @@ def update(wtoken, rtoken, endpoint, limit):
             _, filename = os.path.split(lcsfile.filename)
             filename = filename.split("-")[0]
             filename = filename[4:]
-            print(filename)
             files.append(filename)
+
+        files = set(files)
 
         if  kepid in koisdict:
             koisdict[kepid]['attributes']['{}'.format(kepoi_name)] = {
@@ -219,31 +221,31 @@ def update(wtoken, rtoken, endpoint, limit):
                 'disposition': disposition,
                 'score': score,
             }
-            koisdict[kepid]['attributes']['size'] += 1
+            koisdict[kepid]['attributes']['koi'] += 1
+            if disposition == 'CONFIRMED':
+                koisdict[kepid]['attributes']['trainingset'] = "CONFIRMED"
         else:
             koisdict[kepid] = {
                 'filenames': files,
                 'kepid': kepid,
                 'attributes': {
-                    '{}'.format(kepoi_name): {
-                        'kepler_name': kepler_name,
-                        'disposition': disposition,
-                        'score': score,
-                    },
-                    'size': 1,
+                    '{}'.format(kepoi_name):  disposition,
+                    'koi': 1,
                 },
             }
+            if disposition == 'CONFIRMED':
+                koisdict[kepid]['attributes']['trainingset'] = "CONFIRMED"
 
     click.echo("attributes fetched, updating GTS with the new attributes")
     files = set(files)
 
-
     for _, value in koisdict.items():
         mc2 = Template(META_UPDATE_MC2_TEMPLATE)
-        mc2 = mc2.substitute(rt=rtoken, wt=wtoken, 
+        mc2 = mc2.substitute(rt=rtoken, wt=wtoken,
                              filenames="~(" + ")|(".join(value['filenames']) + ")",
                              attributes=json.dumps(value['attributes']))
         click.echo('{}'.format(mc2))
+        click.echo('------------------')
 
 if __name__ == '__main__':
     cli()
