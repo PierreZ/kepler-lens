@@ -22,3 +22,13 @@ Options:
   --limit TEXT     comma separated list of compagne to download.
   --help           Show this message and exit.
 ```
+
+# Example
+
+```
+python main.py init k2 --path /home/debian/.kepler \ 
+                       --endpoint https://example.org --wtoken WRITEABCD
+                       
+python main.py init kepler --path /home/debian/.kepler \
+                           --endpoint https://example.org --wtoken WRITEABCD --limit C1
+```
