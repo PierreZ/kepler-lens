@@ -112,6 +112,7 @@ def download_campagne(path, limit, dataset, dictFiles, wtoken, endpoint):
             push(csvfolder, endpoint, wtoken)
 
         click.echo('compagne {} done!'.format(compagne))
+        os.mknod(lightcurvesfolder + compagne + ".done")
 
     click.echo('all compagnes are fetched, bye')
 
