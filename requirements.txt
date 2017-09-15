@@ -1,4 +1,4 @@
 Click
 wget
 kplr
-pyketools
+pyketools==3.0b5
