@@ -129,7 +129,7 @@ def generate_csv(compagne, nbrfile, lightcurvesfolder, csvfolder):
         filename = os.fsdecode(file)
         if filename.endswith(".fits") and not os.path.exists(csvfolder + filename.replace(".fits", ".csv")):
             # Generating CSV
-            kepconvert(lightcurvesfolder + filename, "fits2csv", "TIME,SAP_FLUX,SAP_FLUX_ERR",
+            kepconvert(lightcurvesfolder + filename, "fits2csv", "TIME,SAP_FLUX",
                        outfile=csvfolder + filename.replace(".fits", ".csv"), timeformat='unix',
                        baddata=True, overwrite=False, verbose=False)
             os.remove(lightcurvesfolder + filename)
