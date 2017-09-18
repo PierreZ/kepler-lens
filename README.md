@@ -31,4 +31,7 @@ python main.py init k2 --path /home/debian/.kepler \
                        
 python main.py init kepler --path /home/debian/.kepler \
                            --endpoint https://example.org --wtoken WRITEABCD --limit C1
+
+python main.py update --rtoken READACBD \
+                           --endpoint https://example.org --wtoken WRITEABCD --limit 400
 ```

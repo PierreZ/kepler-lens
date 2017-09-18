@@ -8,6 +8,7 @@ from pyke import kepconvert
 from subprocess import call
 import json
 import sys
+import requests
 
 ARCHIVE_URL = 'https://archive.stsci.edu/pub/{}/lightcurves/tarfiles/'
 
@@ -53,15 +54,18 @@ $attributes
 '>
 JSON-> 'data' STORE 
 
-MARK
 
-'$rt' '~.*' { 'id' '$filenames' } NOW -1 ] FETCH
+[ '$rt' '~.*' { 'id' '$filenames' } NOW -1 ] FETCH
 
 <%
     DUP NAME RENAME
-    $$data 'attributes' GET SETATTRIBUTES
+    $$data SETATTRIBUTES
 %> FOREACH
-COUNTTOMARK ->LIST '$wt' META
+DEPTH ->LIST '$wt' META
+CLEAR
+// ------------------------------------------------
+// ------------------------------------------------
+// ------------------------------------------------
 """
 
 
@@ -75,14 +79,15 @@ def cli():
 @click.option('--path', default='/tmp/kepler', help='kepler download folder')
 @click.option('--limit', default='all', help='comma separated list of compagne to download.')
 @click.argument('dataset', type=click.Choice(['k2', 'kepler']))
-def init(wtoken, endpoint, path, limit, dataset):
+@click.option('--lock', default='', help='LOCK file to suppress at the end of import')
+def init(wtoken, endpoint, path, limit, dataset, lock):
     if dataset == "kepler":
-        download_campagne(path, limit, "kepler", KEPLER_TARFILES, wtoken, endpoint)
+        download_campagne(path, limit, "kepler", KEPLER_TARFILES, wtoken, endpoint, lock)
     if dataset == "k2":
-        download_campagne(path, limit, "k2", K2_TARFILES, wtoken, endpoint)
+        download_campagne(path, limit, "k2", K2_TARFILES, wtoken, endpoint, lock)
 
 
-def download_campagne(path, limit, dataset, dictFiles, wtoken, endpoint):
+def download_campagne(path, limit, dataset, dictFiles, wtoken, endpoint, lock):
     click.echo('Initializing the database, downloading {} dataset...'.format(dataset))
 
     baseurl = ARCHIVE_URL.format(dataset)
@@ -109,15 +114,15 @@ def download_campagne(path, limit, dataset, dictFiles, wtoken, endpoint):
         for nbrfile in range(1, nbrfiles + 1):
             dl_campagne(compagne, nbrfile, lightcurvesfolder, baseurl, dataset)
             generate_csv(compagne, nbrfile, lightcurvesfolder, csvfolder)
-            push(csvfolder, endpoint, wtoken)
 
         click.echo('compagne {} done!'.format(compagne))
         os.mknod(lightcurvesfolder + compagne + ".done")
 
+    if limit != "":
+        click.echo('removing LOCK file')
+        os.remove(lock)
+        
     click.echo('all compagnes are fetched, bye')
-
-def push(csvfolder, endpoint, wtoken):
-    call(["/bin/kepler2warp10", '--path={}'.format(csvfolder), '--endpoint={}'.format(endpoint), '--token={}'.format(wtoken)])
 
 def generate_csv(compagne, nbrfile, lightcurvesfolder, csvfolder):
 
@@ -217,25 +222,19 @@ def update(wtoken, rtoken, endpoint, limit):
         files = set(files)
 
         if  kepid in koisdict:
-            koisdict[kepid]['attributes']['{}'.format(kepoi_name)] = {
-                'kepler_name': kepler_name,
-                'disposition': disposition,
-                'score': score,
-            }
-            koisdict[kepid]['attributes']['koi'] += 1
+            koisdict[kepid]['attributes']['{}'.format(kepoi_name)] = disposition
             if disposition == 'CONFIRMED':
-                koisdict[kepid]['attributes']['trainingset'] = "CONFIRMED"
+                koisdict[kepid]['attributes']['status'] = "CONFIRMED"
         else:
             koisdict[kepid] = {
                 'filenames': files,
                 'kepid': kepid,
                 'attributes': {
                     '{}'.format(kepoi_name):  disposition,
-                    'koi': 1,
                 },
             }
             if disposition == 'CONFIRMED':
-                koisdict[kepid]['attributes']['trainingset'] = "CONFIRMED"
+                koisdict[kepid]['attributes']['status'] = "CONFIRMED"
 
     click.echo("attributes fetched, updating GTS with the new attributes")
     files = set(files)
@@ -245,8 +244,13 @@ def update(wtoken, rtoken, endpoint, limit):
         mc2 = mc2.substitute(rt=rtoken, wt=wtoken,
                              filenames="~(" + ")|(".join(value['filenames']) + ")",
                              attributes=json.dumps(value['attributes']))
-        click.echo('{}'.format(mc2))
-        click.echo('------------------')
+        click.echo(mc2)
+        r = requests.post(endpoint + '/api/v0/exec', data = mc2)
+        if r.status_code is not 200:
+            click.echo(r.text)
+            click.echo(mc2)
+        else:
+            click.echo("Warp respond 200")
 
 if __name__ == '__main__':
     cli()

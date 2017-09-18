@@ -2,3 +2,4 @@ Click
 wget
 kplr
 pyketools==3.0b5
+requests
