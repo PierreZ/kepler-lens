@@ -116,7 +116,7 @@ def download_campagne(path, limit, dataset, dictFiles, lock):
         click.echo('compagne {} done!'.format(compagne))
         os.mknod(lightcurvesfolder + compagne + ".done")
 
-    if limit != "":
+    if lock != "":
         click.echo('removing LOCK file')
         os.remove(lock)
         
