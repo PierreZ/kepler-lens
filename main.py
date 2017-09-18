@@ -151,7 +151,6 @@ def dl_campagne(compagne, nbrfile, lightcurvesfolder, baseurl, dataset):
         click.echo('{} already downloaded, moving on'.format(filename))
         return
 
-    os.makedirs(outfolder)
     url = baseurl + compagne
     if dataset == "kepler":
         url = url + "_public"
@@ -164,6 +163,7 @@ def dl_campagne(compagne, nbrfile, lightcurvesfolder, baseurl, dataset):
     click.echo('{} downloaded, untar in progress'.format(filename))
 
     tar = tarfile.open(outfile)
+    os.makedirs(outfolder)
     tar.extractall(path=outfolder)
     tar.close()
 
