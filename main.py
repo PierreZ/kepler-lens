@@ -130,7 +130,7 @@ def generate_csv(compagne, nbrfile, lightcurvesfolder, csvfolder):
 
     for file in os.listdir(directory):
         filename = os.fsdecode(file)
-        if filename.endswith(".fits") and not os.path.exists(csvfolder + filename.replace(".fits", ".csv")):
+        if filename.endswith(".fits"):
             # Generating CSV
             kepconvert(lightcurvesfolder + filename, "fits2csv", "TIME,SAP_FLUX",
                        outfile=csvfolder + filename.replace(".fits", ".csv"), timeformat='unix',
