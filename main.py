@@ -74,20 +74,18 @@ def cli():
     pass
 
 @cli.command()
-@click.option('--wtoken', default='w', help='warp WRITE token')
-@click.option('--endpoint', default='http://localhost:8080', help='warp endpoint')
 @click.option('--path', default='/tmp/kepler', help='kepler download folder')
 @click.option('--limit', default='all', help='comma separated list of compagne to download.')
 @click.argument('dataset', type=click.Choice(['k2', 'kepler']))
 @click.option('--lock', default='', help='LOCK file to suppress at the end of import')
-def init(wtoken, endpoint, path, limit, dataset, lock):
+def init(path, limit, dataset, lock):
     if dataset == "kepler":
-        download_campagne(path, limit, "kepler", KEPLER_TARFILES, wtoken, endpoint, lock)
+        download_campagne(path, limit, "kepler", KEPLER_TARFILES, lock)
     if dataset == "k2":
-        download_campagne(path, limit, "k2", K2_TARFILES, wtoken, endpoint, lock)
+        download_campagne(path, limit, "k2", K2_TARFILES, lock)
 
 
-def download_campagne(path, limit, dataset, dictFiles, wtoken, endpoint, lock):
+def download_campagne(path, limit, dataset, dictFiles, lock):
     click.echo('Initializing the database, downloading {} dataset...'.format(dataset))
 
     baseurl = ARCHIVE_URL.format(dataset)
