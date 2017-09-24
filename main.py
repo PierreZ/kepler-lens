@@ -114,7 +114,6 @@ def download_campagne(path, limit, dataset, dictFiles, lock):
             generate_csv(compagne, nbrfile, lightcurvesfolder, csvfolder)
 
         click.echo('compagne {} done!'.format(compagne))
-        os.mknod(lightcurvesfolder + compagne + ".done")
 
     if lock != "":
         click.echo('removing LOCK file')
