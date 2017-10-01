@@ -55,7 +55,7 @@ $attributes
 JSON-> 'data' STORE 
 
 
-[ '$rt' '~.*' { 'id' '$filenames' } NOW -1 ] FETCH
+[ '$rt' '~.*' { 'id' '$labels' } ] FIND
 
 <%
     DUP NAME RENAME
@@ -177,7 +177,71 @@ def dl_campagne(compagne, nbrfile, lightcurvesfolder, baseurl, dataset):
 @click.option('--endpoint', default='http://localhost:8080', help='warp endpoint')
 @click.option('--limit', default=0, help='limit on koi_period')
 def update(wtoken, rtoken, endpoint, limit):
+    update_k2(wtoken, rtoken, endpoint, limit)
+    update_kepler(wtoken, rtoken, endpoint, limit)
 
+def update_k2(wtoken, rtoken, endpoint, limit):
+
+    client = kplr.API()
+
+    click.echo("fetching all k2candidates")
+
+    candidates = client.ea_request("k2candidates")
+    koisdict = {}
+    for candidate in candidates:
+        disposition = candidate["k2c_disp"]
+        epic_name = candidate["epic_name"]
+        pl_name = candidate["pl_name"]
+        candidate_name = candidate["epic_candname"]
+
+        if candidate_name is None:
+            candidate_name = ''
+
+
+        if pl_name is None:
+            pl_name = ''
+
+        if disposition == 'CONFIRMED':
+            name = pl_name
+        else:
+            name = candidate_name
+
+        epic_name = epic_name.split()[1]
+
+        if epic_name not in koisdict:
+            koisdict[epic_name] = {
+                'attributes': {
+                    name: disposition
+                }
+            }
+        else:
+            koisdict[epic_name][name] = disposition
+        if disposition == 'CONFIRMED':
+            koisdict[epic_name]['attributes']['status'] = "CONFIRMED"
+
+    click.echo("generating warpscript...")
+    warpscript = ""
+    for key, value in koisdict.items():
+        mc2 = Template(META_UPDATE_MC2_TEMPLATE)
+        mc2 = mc2.substitute(rt=rtoken, wt=wtoken,
+                             labels=key,
+                             attributes=json.dumps(value['attributes']))
+        warpscript += mc2
+
+    click.echo("updating meta")
+    r = requests.post(endpoint + '/api/v0/exec', data = warpscript)
+
+    if r.status_code is not 200:
+        click.echo(r.text)
+        click.echo(mc2)
+    else:
+        click.echo("Warp respond 200")
+
+    click.echo("K2 done!")
+
+
+def update_kepler(wtoken, rtoken, endpoint, limit):
+    
     client = kplr.API()
 
     click.echo('Fetching all KOI where koi_period>{}'.format(limit))
@@ -239,9 +303,8 @@ def update(wtoken, rtoken, endpoint, limit):
     for _, value in koisdict.items():
         mc2 = Template(META_UPDATE_MC2_TEMPLATE)
         mc2 = mc2.substitute(rt=rtoken, wt=wtoken,
-                             filenames="~(" + ")|(".join(value['filenames']) + ")",
+                             labels="~(" + ")|(".join(value['filenames']) + ")",
                              attributes=json.dumps(value['attributes']))
-        click.echo(mc2)
         r = requests.post(endpoint + '/api/v0/exec', data = mc2)
         if r.status_code is not 200:
             click.echo(r.text)
